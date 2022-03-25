@@ -103,12 +103,9 @@ class AnSpectSolver:
             for j in range(-halfN,halfN+1):
                 cosBeta=j*anInterval[1]
                 cosAlpha=i*anInterval[0]
-                sum=np.power(cosBeta,2)+np.power(cosAlpha,2)
-                if sum<=1.0:
-                    cosGamma=np.sqrt(1-sum)
-                    A0[i+halfN,j+halfN]*=np.exp(1j*self.k*z*cosGamma)
-                else:
-                    A0[i+halfN,j+halfN]=0
+                sum=np.power(cosBeta,2)+np.power(cosAlpha,2)          
+                cosGamma=np.sqrt((1-sum)+0j)
+                A0[i+halfN,j+halfN]*=np.exp(1j*self.k*z*cosGamma)
         self.Uz=ifft2(A0)
         return self.Uz
 
