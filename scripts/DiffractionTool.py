@@ -11,6 +11,7 @@ Date: 2022-03-22 16:25:04
 #import all the things we need
 from cmath import pi
 import numpy as np
+import matplotlib.pyplot as plt
 from scipy import signal
 from scipy.fft import fft2,ifft2
 from scipy.fftpack import fftshift
@@ -193,6 +194,78 @@ class PatternGenerator:
         if self.pattern=='rectangle':
             assert len(size)==2, 'Not correct params\' number'
             return self.__generateRectangle(size)
+
+class HelperFunctions:
+    '''Some support functions'''
+
+    @staticmethod
+    def displace_2d(I,xylabels,interval,figureSize=(4,3),**kwargs):
+        fig, axes = plt.subplots(1,1,figsize=figureSize)
+        X=np.linspace(interval[0][0],interval[0][1],I.shape[1])
+        Y=np.linspace(interval[1][0],interval[1][1],I.shape[0])
+        axes.contourf(X,Y,I)
+        if 'xylim' in kwargs:
+            xylim=kwargs['xylim']
+            axes.set_xlim(xylim[0])
+            axes.set_ylim(xylim[1])
+        axes.set_xlabel(xylabels[0])
+        axes.set_ylabel(xylabels[1])
+
+    @staticmethod
+    def intensity(U):
+        return  np.real(U*np.conj(U))
+
+class PhaseModulator:
+    '''A class for modulating the phase'''
+
+    def __init__(self,modulator=lambda X,Y:1.0):
+        '''
+        name: __init__
+        fuction: initialize the phase modulator
+        param {kwargs}:
+            f(X,Y): modulate the phase
+        '''        
+        self.modulator=modulator
+    
+    def __call__(self,X,Y):
+        return self.modulator(X,Y)
+    
+    def get_normal_lens_modulator(self,k:float,f:float,r:float):
+        '''
+        name: get_normal_lens_modulator
+        fuction: get the normal lens modulator
+        param {k}: wave vector
+        param {f}: focal length
+        param {r}: radius
+        return {modulator}: modulator
+        '''        
+        def modulator(X,Y):
+            r2=X**2+Y**2
+            rl2=r**2
+            if r2<rl2:
+                return np.exp(-1j*k/(2*f)*(X**2+Y**2))
+            else:
+                return 0
+        self.modulator=modulator
+        return modulator
+    
+    def apply_modulator(self,U0:np.ndarray,sizeN:int,interval:list):
+        '''
+        name: apply_modulator
+        fuction: apply the modulator to the phase
+        param {U0}: 2d array
+        param {sizeN}: simulation size
+        param {interval}: a list of sample interval [x_interval,y_interval]
+        return {Uz}: 2d array
+        '''        
+        halfN=round(sizeN/2)
+        Uz=np.zeros((sizeN,sizeN),dtype=complex)
+        for i in range(-halfN,halfN+1):
+            X=i*interval[0]
+            for j in range(-halfN,halfN+1):
+                Y=j*interval[1]
+                Uz[i+halfN,j+halfN]=U0[i+halfN,j+halfN]*self.modulator(X,Y)
+        return Uz
 
 
 
