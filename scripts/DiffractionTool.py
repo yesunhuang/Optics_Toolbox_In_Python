@@ -10,29 +10,51 @@ Date: 2022-03-22 16:25:04
 
 #import all the things we need
 from cmath import pi
+from re import U
 import numpy as np
+import abc
+import cv2
 import matplotlib.pyplot as plt
+import time
 from scipy import signal
 from scipy.fft import fft2,ifft2
 from scipy.fftpack import fftshift
+from torch import float32
 
-class RaySomSolver:
+#Some constants
+EPSILON=1e-12
+
+
+class WavePropagator(metaclass=abc.ABCMeta):
+    '''the abstract base class for wave propagator'''
+
+    @abc.abstractmethod
+    def __init__(self,sizeN:int, interval:list, k:float, z:float=1.0):
+        pass
+
+    @abc.abstractmethod
+    def cal_wavefront(self,U0:np.ndarray,z:float=None):
+        pass
+
+class RaySomSolver(WavePropagator):
     '''A solver for simulate diffraction via Rayleigh-Sommerfeld method'''
 
-    def __init__(self,sizeN:int, interval:list, k:float, **kwargs):
+    def __init__(self,sizeN:int, interval:list, k:float, z:float=1.0):
         '''
         name: __init__ 
         fuction: initialize the class
         param {sizeN}: simulation size
         param {interval}: a list of sample interval [x_interval,y_interval]
         param {k}: wave number
+        param {z}: the default z
         param {**kwargs}: other params
         '''            
         self.sizeN=sizeN
         assert sizeN % 2!=0, 'Please use odd number for size'
         self.interval=interval
+        self.flag=False
         self.k=k
-        self.kwargs=kwargs
+        self.z=z
     
     def __generate_g(self,z:float):
         '''
@@ -40,7 +62,8 @@ class RaySomSolver:
         fuction: Generate the defaut Green function
         param {z}: observation distance
         return {g_func}: the g function
-        '''        
+        '''     
+        self.flag=True   
         self.g_func=np.zeros((self.sizeN,self.sizeN),dtype=np.complex)
         halfN=round(self.sizeN/2)
         for i in range(-halfN,halfN+1):
@@ -53,7 +76,7 @@ class RaySomSolver:
                                 (z/r)
         return self.g_func
 
-    def cal_wavefront(self,U0:np.ndarray,z:float):
+    def cal_wavefront(self,U0:np.ndarray,z:float=None):
         '''
         name:cal_wavefront 
         fuction: calculate the wavefront of xy plane at desired z 
@@ -62,21 +85,23 @@ class RaySomSolver:
         return {Uz}: wavefront at z
         '''        
         assert U0.shape[0]==self.sizeN, 'Size mismatched!'
-        self.__generate_g(z)
+        if (not z==None) or (not self.flag):
+            self.__generate_g(self.z)
         self.Uz=signal.fftconvolve(U0,self.g_func,mode='same')
         #self.Uz=fftshift(ifft2(fft2(U0)*fft2(self.g_func)))
         return self.Uz
 
-class AnSpectSolver:
+class AnSpectSolver(WavePropagator):
     '''A solver for simulate diffraction via Angular Spectrum method'''
 
-    def __init__(self,sizeN:int, interval:list, k:float, **kwargs):
+    def __init__(self,sizeN:int, interval:list, k:float, z:float=1.0):
         '''
         name: __init__ 
         fuction: initialize the class
         param {sizeN}: simulation size
         param {interval}: a list of sample interval [x_interval,y_interval]
         param {k}: wave number
+        param {z}: the defaut z
         param {**kwargs}: other params
         '''            
         self.sizeN=sizeN
@@ -84,10 +109,10 @@ class AnSpectSolver:
         self.interval=np.asarray(interval)
         self.k=k
         self.lam=2*pi/k
-        self.kwargs=kwargs
+        self.z=z
     
 
-    def cal_wavefront(self,U0:np.ndarray,z:float):
+    def cal_wavefront(self,U0:np.ndarray,z:float=None):
         '''
         name:cal_wavefront 
         fuction: calculate the wavefront of xy plane at desired z 
@@ -96,6 +121,8 @@ class AnSpectSolver:
         return {Uz}: wavefront at z
         '''        
         assert U0.shape[0]==self.sizeN, 'Size mismatched!'
+        if z==None:
+            z=self.z
         A0=fftshift(fft2(U0))
         halfN=round(self.sizeN/2)
         anInterval=np.ones(2)*self.lam/(self.sizeN*self.interval)
@@ -109,6 +136,34 @@ class AnSpectSolver:
                 A0[i+halfN,j+halfN]*=np.exp(1j*self.k*z*cosGamma)
         self.Uz=ifft2(A0)
         return self.Uz
+
+class FFTSolver(WavePropagator):
+    '''A solver for simulate diffraction via FFT method'''
+
+    def __init__(self,sizeN:int, interval:list, k:float, z:float=1.0):
+        '''
+        name: __init__ 
+        fuction: initialize the class
+        param {sizeN}: simulation size
+        param {interval}: a list of sample interval [x_interval,y_interval]
+        param {k}: wave number
+        param {z}: the defaut z
+        param {**kwargs}: other params
+        '''            
+        self.sizeN=sizeN
+        assert sizeN % 2!=0, 'Please use odd number for size'
+        self.interval=interval
+        self.flag=False
+        self.k=k
+        self.z=z
+    
+    def cal_wavefront(self, U0: np.ndarray, z: float = None):
+        if z==None:
+            z=self.z
+        if z>0:
+            return fftshift(fft2(U0.astype(complex)))
+        else:
+            return ifft2(U0.astype(complex))
 
 class PatternGenerator:
     '''A class for generating regular patterns'''
@@ -171,7 +226,7 @@ class PatternGenerator:
             for j in range(-halfN,halfN+1):
                 Y=j*self.interval[1]
                 if (abs(X)<=size[0]/2) and (abs(Y)<=size[1]/2):
-                    self.pattern[i+halfN,j+halfN]=1.0*self.modulator(X,Y)
+                    self.patternMatrix[i+halfN,j+halfN]=1.0*self.modulator(X,Y)
         return self.patternMatrix.copy() 
     
     def generate(self,size:list):
@@ -191,7 +246,7 @@ class PatternGenerator:
             assert len(size)==1, 'Not correct params\' number'
             size=size.append(size[0])
             return self.__generateRectangle(size)
-        if self.pattern=='rectangle':
+        if self.pattern=='rect':
             assert len(size)==2, 'Not correct params\' number'
             return self.__generateRectangle(size)
 
@@ -267,9 +322,149 @@ class PhaseModulator:
                 Uz[i+halfN,j+halfN]=U0[i+halfN,j+halfN]*self.modulator(X,Y)
         return Uz
 
+class PhaseTypeHologram:
+    '''A class built to calculate phase type hologram'''
 
+    def __init__(self, sizeN:int, interval:list, pixelSize:list, shape:np.ndarray):
+        '''
+        name: __init__
+        function: initialize the class
+        param {sizeN}: sample size
+        param {interval}: a list of sample interval [x_interval,y_interval]
+        pixelSize: the size of pixel
+        shape: determine the shape of hologram, the active pixel should not be zero. 
+        It can also be the initial phase distribution of phase hologram. 
+        '''
+        self.sizeN=sizeN
+        self.halfN=round(sizeN/2)
+        self.interval=interval
+        self.pixelSize=pixelSize
+        assert pixelSize[0]>=interval[0] and pixelSize[1]>=interval[1], 'pixelSize is too small'
+        self.pixelInterval=[int(px/inl) for px,inl in zip(pixelSize,interval)]
+        assert self.pixelInterval[0]<=self.sizeN and self.pixelInterval[1]<=self.sizeN, 'pixelInterval is too large'
+        self.pixelN=[int(sizeN*inl/pinI) for inl,pinI in zip(interval,self.pixelInterval)]
+        self.shape=(np.real(shape)).astype(np.float32)
+        assert shape.shape==(sizeN,sizeN), 'shape is not correct'
+        self.hologramPhase=(np.ones((self.pixelN[0],self.pixelN[1]),dtype=np.float32)*2*np.pi)
+        self.pixelShape=cv2.resize((self.shape).astype(np.float32),(self.pixelN[0],self.pixelN[1]))
+        self.hologramMatrix=np.exp(1j*cv2.resize(self.hologramPhase,(self.sizeN,self.sizeN)))
+        self.phaseModulator=PhaseModulator(self.modulator)
 
-                
+    def __call__(self,X,Y):
+        '''
+        name: __call__
+        function: apply the modulator on (X,Y)
+        param {X}: X coordinate
+        paran {Y}: Y coordinate
+        return {the modulator}
+        '''
+        return self.modulator(X,Y)
+
+    def modulator(self,X,Y):
+        '''
+        name: modulator
+        function: modulator the phase
+        param {X}: X coordinate
+        param {Y}: Y coordinate
+        return {the phase value}
+        '''
+        x=int(X/self.interval[0])+self.halfN
+        y=int(Y/self.interval[1])+self.halfN
+        assert x>=0 and x<self.sizeN and y>=0 and y<self.sizeN, 'out of range'
+        if self.shape[x,y]>EPSILON:
+            return self.hologramMatrix[x,y]
+        else:
+            return 0
+
+    def __single_GS_epoch(self,incidentLight:np.ndarray,targetImage:np.ndarray,\
+                        propagator:list):
+        '''
+        name: __single_GS_epoch
+        param {incidentLight}: incident light distribution
+        param {targetImage}: target image
+        param {propagator}: a list of propagator
+        '''
+        #propagate forward
+        U=self.phaseModulator.apply_modulator(incidentLight,self.sizeN,self.interval)
+        U=propagator[0].cal_wavefront(U)
+        ICurrent=HelperFunctions.intensity(U)
+        ICurrent=ICurrent/np.max(np.abs(ICurrent))
+        diff=ICurrent-targetImage
+        loss=np.sum(diff*diff)/np.size(diff)
+        newPhase=np.angle(U)
+        #propagate backward
+        U=np.exp(1j*newPhase)*np.sqrt(targetImage)
+        U=propagator[1].cal_wavefront(U)
+        newPhase=(np.angle(U)).astype(np.float32)
+        self.hologramPhase=cv2.resize(newPhase,(self.pixelN[0],self.pixelN[1]))
+        self.hologramMatrix=np.exp(1j*cv2.resize(self.hologramPhase,(self.sizeN,self.sizeN)))
+        return loss
+
+    def get_hologram(self,z:float,k:float,
+                    incidentLight:np.ndarray,\
+                    targetImage:np.ndarray,epoches:int=10,\
+                    method:str='RS',epochStep:int=1,printLoss:float=True):
+        '''
+        name: get_hologram
+        function: get the desired hologram via GS algorithm
+        param {z}: the distance to the desired image plane
+        param {k}: the wave number
+        param {incidentLight}: incident light distribution
+        param {targetImage}: target image
+        param {epoches}: the optimization epoches
+        param {method}: the propagation method 'RS', 'ANG','FFT'
+        return {the loss}
+        '''
+        assert incidentLight.shape==(self.sizeN,self.sizeN), 'incidentLight is not correct'
+        assert targetImage.shape==(self.sizeN,self.sizeN), 'targetImage is not correct'
+        assert z>0, 'z is not correct'
+        targetImage=targetImage/np.max(np.abs(targetImage))
+        loss=[]
+        if method=='RS':
+            propagator=[RaySomSolver(self.sizeN,self.interval,k,z),\
+                RaySomSolver(self.sizeN,self.interval,k,-z)]
+        elif method=='ANG':
+            propagator=[AnSpectSolver(self.sizeN,self.interval,k,z),\
+                AnSpectSolver(self.sizeN,self.interval,k,-z)]
+        elif method=='FFT':
+            propagator=[FFTSolver(self.sizeN,self.interval,k,z),\
+                FFTSolver(self.sizeN,self.interval,k,-z)]
+        ts=time.time()
+        for epoch in range(epoches):
+            loss.append(self.__single_GS_epoch(incidentLight,targetImage,propagator))
+            if printLoss:
+                if (epoch+1)%epochStep==0:
+                    te=time.time()
+                    print(f'Epoch [{epoch+1}/{epoches}], loss: {loss[-1]:f}, time: {te-ts:f}s')
+                    ts=time.time()
+        return loss
+
+    def apply_hologram(self,z:float,k:float,
+                    incidentLight:np.ndarray,method:str='RS'):
+        '''
+        name: apply_hologram
+        function: apply the desired hologram via GS algorithm
+        param {z}: the distance to the desired image plane
+        param {k}: the wave number
+        param {incidentLight}: incident light distribution
+        param {method}: the propagation method 'RS', 'ANG'
+        return {target U}
+        '''
+        if method=='RS':
+            propagator=RaySomSolver(self.sizeN,self.interval,k,z)
+        elif method=='ANG':
+            propagator=AnSpectSolver(self.sizeN,self.interval,k,z)
+        U=self.phaseModulator.apply_modulator(incidentLight,self.sizeN,self.interval)
+        return propagator.cal_wavefront(U)
+
+    def get_hologram_phase_distribution(self):
+        '''
+        name: get_hologram_distribution
+        function: get the hologram distribution
+        return {the hologram distribution}
+        '''
+        return np.angle(self.hologramMatrix)*self.shape
+        
 
 
 
