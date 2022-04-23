@@ -19,6 +19,7 @@ import time
 from scipy import signal
 from scipy.fft import fft2,ifft2
 from scipy.fftpack import fftshift
+from sqlalchemy import false
 from torch import float32
 
 #Some constants
@@ -227,17 +228,20 @@ class HelperFunctions:
     '''Some support functions'''
 
     @staticmethod
-    def displace_2d(I,xylabels,interval,figureSize=(4,3),**kwargs):
+    def displace_2d(I,xylabels,interval,figureSize=(4,3),\
+                    xylim:list=[],enableColorBar:float=false):
         fig, axes = plt.subplots(1,1,figsize=figureSize)
         X=np.linspace(interval[0][0],interval[0][1],I.shape[1])
         Y=np.linspace(interval[1][0],interval[1][1],I.shape[0])
-        axes.contourf(X,Y,I)
-        if 'xylim' in kwargs:
-            xylim=kwargs['xylim']
+        ax=axes.contourf(X,Y,I)
+        if len(xylim)!=0:
             axes.set_xlim(xylim[0])
             axes.set_ylim(xylim[1])
         axes.set_xlabel(xylabels[0])
         axes.set_ylabel(xylabels[1])
+        #show color bar
+        if enableColorBar:
+            fig.colorbar(ax)
 
     @staticmethod
     def intensity(U):
