@@ -19,6 +19,7 @@ from scipy import signal
 from scipy.fft import fft2,ifft2
 from scipy.fftpack import fftshift
 from sqlalchemy import false
+from torch import renorm
 
 #Some constants
 EPSILON=1e-12
@@ -54,6 +55,7 @@ class RaySomSolver(WavePropagator):
         self.flag=False
         self.k=k
         self.z=z
+        self.renorm=interval[0]*interval[1]
     
     def __generate_g(self,z:float):
         '''
@@ -71,8 +73,9 @@ class RaySomSolver(WavePropagator):
             for j in range(-halfN,halfN+1):
                 y=j*self.interval[1]
                 r=np.sqrt(x**2+y**2+z**2)
-                self.g_func[i+halfN,j+halfN]=(-1.0/(2*pi))*(1j*self.k-1.0/r)*\
-                                (np.exp(1j*self.k*r)/r)*\
+                self.g_func[i+halfN,j+halfN]=(-1.0/(2*pi))*\
+                                (1j*self.k*np.sign(z)-1.0/r)*\
+                                (np.exp(1j*self.k*r*np.sign(z))/r)*\
                                 (z/r)
         return self.g_func
 
@@ -89,7 +92,7 @@ class RaySomSolver(WavePropagator):
             self.__generate_g(self.z)
         self.Uz=signal.fftconvolve(U0,self.g_func,mode='same')
         #self.Uz=fftshift(ifft2(fft2(U0)*fft2(self.g_func)))
-        return self.Uz
+        return self.Uz*self.renorm
 
 class AnSpectSolver(WavePropagator):
     '''A solver for simulate diffraction via Angular Spectrum method'''
@@ -110,6 +113,7 @@ class AnSpectSolver(WavePropagator):
         self.k=k
         self.lam=2*pi/k
         self.z=z
+        self.renorm=interval[0]*interval[1]
     
 
     def cal_wavefront(self,U0:np.ndarray,z:float=None):
@@ -135,7 +139,8 @@ class AnSpectSolver(WavePropagator):
                 cosGamma=np.sqrt((1-sum)+0j)
                 A0[i+halfN,j+halfN]*=np.exp(1j*self.k*z*cosGamma)
         self.Uz=ifft2(A0)
-        return self.Uz
+        #TODO:The renormalization here might be incorrect.
+        return self.Uz*self.renorm
 
 class PatternGenerator:
     '''A class for generating regular patterns'''
