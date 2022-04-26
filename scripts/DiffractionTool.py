@@ -10,7 +10,6 @@ Date: 2022-03-22 16:25:04
 
 #import all the things we need
 from cmath import pi
-from re import U
 import numpy as np
 import abc
 import cv2
@@ -20,7 +19,6 @@ from scipy import signal
 from scipy.fft import fft2,ifft2
 from scipy.fftpack import fftshift
 from sqlalchemy import false
-from torch import float32
 
 #Some constants
 EPSILON=1e-12
@@ -308,8 +306,8 @@ class PhaseTypeHologram:
         function: initialize the class
         param {sizeN}: sample size
         param {interval}: a list of sample interval [x_interval,y_interval]
-        pixelSize: the size of pixel
-        shape: determine the shape of hologram, the active pixel should not be zero. 
+        param {pixelSize}: the size of pixel
+        param {shape}: determine the shape of hologram, the active pixel should not be zero. 
         It can also be the initial phase distribution of phase hologram. 
         '''
         self.sizeN=sizeN
@@ -317,9 +315,9 @@ class PhaseTypeHologram:
         self.interval=interval
         self.pixelSize=pixelSize
         assert pixelSize[0]>=interval[0] and pixelSize[1]>=interval[1], 'pixelSize is too small'
-        self.pixelInterval=[int(px/inl) for px,inl in zip(pixelSize,interval)]
-        assert self.pixelInterval[0]<=self.sizeN and self.pixelInterval[1]<=self.sizeN, 'pixelInterval is too large'
-        self.pixelN=[int(sizeN*inl/pinI) for inl,pinI in zip(interval,self.pixelInterval)]
+        self.pixelIntervalN=[int(px/inl) for px,inl in zip(pixelSize,interval)]
+        assert self.pixelIntervalN[0]<=self.sizeN and self.pixelIntervalN[1]<=self.sizeN, 'pixelInterval is too large'
+        self.pixelN=[int(sizeN/pinI) for pinI in self.pixelIntervalN]
         self.shape=(np.real(shape)).astype(np.float32)
         assert shape.shape==(sizeN,sizeN), 'shape is not correct'
         self.hologramPhase=np.ones((self.pixelN[0],self.pixelN[1]),dtype=np.float32)*2*np.pi
