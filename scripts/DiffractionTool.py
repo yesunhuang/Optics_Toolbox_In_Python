@@ -230,7 +230,7 @@ class HelperFunctions:
 
     @staticmethod
     def displace_2d(I,xylabels,interval,figureSize=(4,3),\
-                    xylim:list=[],enableColorBar:float=false):
+                    xylim:list=[],enableColorBar:float=False):
         fig, axes = plt.subplots(1,1,figsize=figureSize)
         X=np.linspace(interval[0][0],interval[0][1],I.shape[1])
         Y=np.linspace(interval[1][0],interval[1][1],I.shape[0])
@@ -443,6 +443,9 @@ class PhaseTypeHologram:
         return {the hologram matrix}
         '''
         return self.hologramMatrix*self.shape
+
+class ImageSys4f:
+    '''A class for implement a 4f imaging system'''
         
 
 
