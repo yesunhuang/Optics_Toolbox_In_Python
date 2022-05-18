@@ -1,4 +1,13 @@
 '''
+Name: 
+Desriptption: 
+Email: yesunhuang@mail.ustc.edu.cn
+OpenSource: https://github.com/yesunhuang
+Msg: 
+Author: YesunHuang
+Date: 2022-05-18 19:18:16
+'''
+'''
 Name: DiffractionTool
 Desriptption: This file implements all the tools for simulating diffraction
 Email: yesunhuang@mail.ustc.edu.cn
@@ -467,76 +476,8 @@ class PhaseTypeHologram:
 
 class ImageSys4f:
     '''A class for implement a 4f imaging system'''
-    
-    def __init__(self,sizeN:int,interval:list,\
-                k:float,f:float,r:float,\
-                method:str='RS'):
-        '''
-        name: __init__
-        function: initialize the system
-        param {sizeN}: the size of the hologram
-        param {interval}: the interval of the hologram
-        param {k}: the wave number
-        param {f}: the focal length
-        param {r}: the radius of the lens
-        param {method}: the propagation method 'RS', 'ANG'
-        '''
-        self.sizeN=sizeN
-        self.interval=interval
-        self.k=k
-        self.f=f
-        self.r=r
-        self.fqFilter=np.ones((self.sizeN,self.sizeN))
-        self.halfN=int(sizeN/2)
-        if method=='RS':
-            self.propagator=RaySomSolver(sizeN,interval,k,f)
-        elif method=='ANG':
-            self.propagator=AnSpectSolver(sizeN,interval,k,f)
-        self.lens=PhaseModulator()
-        self.lens.get_normal_lens_modulator(self.k,self.f,self.r)
-        self.lensMatrix=self.lens.get_modulator_matix(self.sizeN,self.interval)
-
-    def generate_image(self,U0:np.ndarray,fqFilter:np.ndarray=None):
-        '''
-        name: generate_image
-        function: generate the image
-        param {U0}: the wavefront
-        param {fqFilter}: the filter
-        return {the image}
-        '''
-        if fqFilter is None:
-            fqFilter=self.fqFilter
-        #U on the first lens
-        U=self.propagator.cal_wavefront(U0)
-        U=self.lensMatrix*U
-        #U on P2
-        U=self.propagator.cal_wavefront(U)
-        U=U*fqFilter
-        #U on the second lens
-        U=self.propagator.cal_wavefront(U)
-        U=self.lensMatrix*U
-        #U on P3
-        U=self.propagator.cal_wavefront(U)
-        return U
-
-    def calConvFilter(self,convFilter:np.ndarray,enhance:float=1):
-        '''
-        name: calConvFilter
-        function: calculate the frequency filter of the convolution filter
-        param {convFilter}: the convolution filter
-        pamra {enhance}: the enhancement factor
-        return {the frequency filter}
-        '''
-        padConvFilter=np.zeros((self.sizeN,self.sizeN))
-        covSize=[convFilter.shape[0],convFilter.shape[1]]
-        assert covSize[0]%2!=0 and covSize[1]%2!=0, 'the convolution filter size is not correct'
-        padConvFilter[self.halfN-covSize[0]//2:self.halfN+covSize[0]//2,\
-            self.halfN-covSize[1]//2:self.halfN+covSize[1]//2]=enhance*convFilter[:]
-        # on the first len
-        U=self.propagator.cal_wavefront(padConvFilter)
-        U=self.lensMatrix*U
-        # on P2
-        self.fqFilter=self.propagator.cal_wavefront(U)
-        return self.fqFilter
         
-       
+
+
+
+
