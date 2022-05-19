@@ -87,6 +87,8 @@ class RaySomSolver(WavePropagator):
         '''        
         assert U0.shape[0]==self.sizeN, 'Size mismatched!'
         if (not z==None) or (not self.flag):
+            if not z==None:
+                self.z=z
             self.__generate_g(self.z)
         self.Uz=signal.fftconvolve(U0,self.g_func,mode='same')
         #self.Uz=fftshift(ifft2(fft2(U0)*fft2(self.g_func)))
@@ -248,6 +250,30 @@ class HelperFunctions:
     def intensity(U):
         return  np.real(U*np.conj(U))
 
+    @staticmethod
+    def pad_and_resize(originImg:np.ndarray,imgActualSize:float,\
+                        actualSize:float,NSize:int):
+        imgNSize=originImg.shape[0]
+        padSize=int((actualSize/(imgActualSize)*imgNSize-imgNSize)/2)
+        targetImg=cv2.copyMakeBorder(originImg,padSize,padSize,padSize,padSize,cv2.BORDER_CONSTANT,value=0)
+        targetImg=cv2.resize(targetImg,(NSize,NSize))
+        return targetImg
+
+    @staticmethod
+    def normalize(originImg:np.ndarray):
+        return originImg/np.max(np.abs(originImg))
+
+    @staticmethod
+    def zoom_in(originImg:np.ndarray,imgActualSize:float,\
+                    actualSize:float,NSize:int,pad:int=0):
+        imageZoomInterval=int(imgActualSize/actualSize*NSize)
+        zoomResImg=originImg[NSize//2-imageZoomInterval//2+pad:\
+                            NSize//2+imageZoomInterval//2-pad,\
+                            NSize//2-imageZoomInterval//2+pad:\
+                            NSize//2+imageZoomInterval//2-pad]
+        return zoomResImg
+        
+
 class PhaseModulator:
     '''A class for modulating the phase'''
 
@@ -301,7 +327,7 @@ class PhaseModulator:
                 Uz[i+halfN,j+halfN]=U0[i+halfN,j+halfN]*self.modulator(X,Y)
         return Uz
     
-    def get_modulator_matix(self,sizeN:int,interval:list):
+    def get_modulator_matrix(self,sizeN:int,interval:list):
         '''
         name: get_modulator_matix
         fuction: get the modulator matrix
@@ -494,7 +520,7 @@ class ImageSys4f:
             self.propagator=AnSpectSolver(sizeN,interval,k,f)
         self.lens=PhaseModulator()
         self.lens.get_normal_lens_modulator(self.k,self.f,self.r)
-        self.lensMatrix=self.lens.get_modulator_matix(self.sizeN,self.interval)
+        self.lensMatrix=self.lens.get_modulator_matrix(self.sizeN,self.interval)
 
     def generate_image(self,U0:np.ndarray,fqFilter:np.ndarray=None):
         '''
@@ -527,16 +553,16 @@ class ImageSys4f:
         pamra {enhance}: the enhancement factor
         return {the frequency filter}
         '''
-        padConvFilter=np.zeros((self.sizeN,self.sizeN))
+        padConvFilter=np.zeros((self.sizeN,self.sizeN),dtype=complex)
         covSize=[convFilter.shape[0],convFilter.shape[1]]
         assert covSize[0]%2!=0 and covSize[1]%2!=0, 'the convolution filter size is not correct'
-        padConvFilter[self.halfN-covSize[0]//2:self.halfN+covSize[0]//2,\
-            self.halfN-covSize[1]//2:self.halfN+covSize[1]//2]=enhance*convFilter[:]
+        padConvFilter[self.halfN-covSize[0]//2:self.halfN+covSize[0]//2+1,\
+            self.halfN-covSize[1]//2:self.halfN+covSize[1]//2+1]=enhance*convFilter[:]
         # on the first len
         U=self.propagator.cal_wavefront(padConvFilter)
         U=self.lensMatrix*U
         # on P2
-        self.fqFilter=self.propagator.cal_wavefront(U)
-        return self.fqFilter
+        fqFilter=self.propagator.cal_wavefront(U)
+        return fqFilter
         
        
